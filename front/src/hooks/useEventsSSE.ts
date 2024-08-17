@@ -1,6 +1,6 @@
 import {useEffect} from 'react';
-import {sseTesting, EntityType} from "./api.ts";
-import {useAppDispatch} from "./store.ts";
+import {sseTesting, EntityType} from "../api/api.ts";
+import {useAppDispatch} from "../common/store.ts";
 
 export const useSseForDocumentUpdates = (start: boolean, handler: () => void) => {
 	const dispatch = useAppDispatch();

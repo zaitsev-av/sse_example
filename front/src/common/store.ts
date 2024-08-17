@@ -1,6 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit'
 import {useDispatch, useSelector} from "react-redux";
-import {sseTesting} from "./api.ts";
+import {sseTesting} from "../api/api.ts";
 
 export const store = configureStore({
 	reducer: {
