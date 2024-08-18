@@ -24,17 +24,19 @@ function App() {
 	return (
 		<>
 			<div className="card">
-				<input value={value} onChange={handleOnChange}/>
-				<button onClick={() => {
-					setEntity(prevState => [...prevState, {
-						name: value,
-						id: (100000 * Math.random()).toFixed().toString(),
-						status: 'pending'
-					} as EntityType])
-					setValue("")
-				}}>
-					add
-				</button>
+				<div className="card-body">
+					<input className="text-field" value={value} onChange={handleOnChange}/>
+					<button onClick={() => {
+						setEntity(prevState => [...prevState, {
+							name: value,
+							id: (100000 * Math.random()).toFixed().toString(),
+							status: 'pending'
+						} as EntityType])
+						setValue("")
+					}}>
+						add
+					</button>
+				</div>
 				<div style={{display: "flex", justifyContent: "space-around"}}>
 					<ul>
 						<h3>Созданный данне</h3>

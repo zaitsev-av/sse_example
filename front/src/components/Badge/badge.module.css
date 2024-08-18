@@ -1,0 +1,12 @@
+.root {
+	display: flex;
+	flex-direction: row;
+	justify-content: space-between;
+	padding: 10px;
+	width: 200px;
+	.element {
+		padding: 10px;
+		border-radius: 8px;
+		text-align: left;
+	}
+}

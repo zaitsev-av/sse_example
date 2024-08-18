@@ -1,20 +1,15 @@
 import {FC} from "react";
-import {EntityType} from "../../api/api.ts";
+import {EntityType} from "../../api";
+import s from './badge.module.css'
 
 interface Props {
 	entity: EntityType
-};
+}
+
 export const Badge: FC<Props> = ({entity}) => {
 	return (
-		<li style={{
-			padding: '10px', width: '200px', display: 'flex',
-			flexDirection: "row",
-			justifyContent: 'space-between',
-		}}>{entity.name} <span style={{
+		<li className={s.root}>{entity.name} <span className={s.element} style={{
 			background: entity.status === 'pending' ? '#4d7373' : entity.status === "in_progress" ? "rgb(230 194 29 / 90%)" : '#09ff066b',
-			padding: '10px',
-			borderRadius: '8px',
-			textAlign: "left"
 		}}>{entity.status}</span>
 		</li>
 	)
