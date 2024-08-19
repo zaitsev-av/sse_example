@@ -96,7 +96,11 @@ func handleSSE(w http.ResponseWriter, r *http.Request) {
 			return
 		default:
 			// изменяем статус объекта
-			newGroupData[i].Status = getRandomStatus()
+			itemId := newGroupData[i].ID
+
+			newItemStatus := getRandomStatus()
+			newGroupData[i].Status = newItemStatus
+			FindById(groupData, itemId).Status = newItemStatus
 
 			// Если это последний элемент, устанавливаем флаг ProcessingEnd
 			if i == len(newGroupData)-1 {
@@ -255,4 +259,13 @@ func main() {
 
 	fmt.Println("Server started at :8080")
 	log.Fatal(http.ListenAndServe(":8080", server))
+}
+
+func FindById(list []GroupStatus, id string) *GroupStatus {
+	for i := range list {
+		if list[i].ID == id {
+			return &list[i]
+		}
+	}
+	return nil
 }
