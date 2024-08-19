@@ -7,14 +7,16 @@ import (
 	"math/rand"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 type GroupStatus struct {
-	ID     string `json:"id"`
-	Status string `json:"status"`
-	Name   string `json:"name"`
+	ID            string `json:"id"`
+	Status        string `json:"status"`
+	Name          string `json:"name"`
+	ProcessingEnd bool   `json:"processing_end"`
 }
 
 var (
@@ -70,34 +72,54 @@ func handleSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
+	clientClosed := make(chan bool)
+
+	// Ожидание закрытия соединения клиентом
+	go func() {
+		if c, ok := w.(http.CloseNotifier); ok {
+			<-c.CloseNotify()
+			log.Println("Клинет закрыл соединение - 81")
+			clientClosed <- true
+		}
+	}()
+
 	dataCond.L.Lock()
 	for !dataReady {
 		dataCond.Wait() // Ждать пока данные не будут готовы
 	}
 	dataCond.L.Unlock()
 
-	// Изменить статусы только новых объектов
-	for i := range newGroupData {
-		newGroupData[i].Status = getRandomStatus()
-	}
+	for i := 0; i < len(newGroupData); i++ {
+		select {
+		case <-clientClosed:
+			log.Println("Клмент закрыл соединени, прекращаем обработку")
+			return
+		default:
+			// изменяем статус объекта
+			newGroupData[i].Status = getRandomStatus()
 
-	// Обновляем groupData с измененными статусами
-	groupData = append(groupData[:len(groupData)-len(newGroupData)], newGroupData...)
+			// Если это последний элемент, устанавливаем флаг ProcessingEnd
+			if i == len(newGroupData)-1 {
+				newGroupData[i].ProcessingEnd = true
+			}
 
-	// Отправить обновленные данные на клиент
-	data, err := json.Marshal(newGroupData)
-	log.Println("Data for client newGroupData")
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to encode JSON: %v", err), http.StatusInternalServerError)
-		return
-	}
-	fmt.Fprintf(w, "data: %s\n\n", data)
-	flusher.Flush()
+			// Отправить обновленные данные на клиент
+			data, err := json.Marshal(newGroupData[i])
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Failed to encode JSON: %v", err), http.StatusInternalServerError)
+				return
+			}
 
-	// Оставляем соединение открытым, пока клиент сам его не закроет
-	if c, ok := w.(http.CloseNotifier); ok {
-		<-c.CloseNotify()
-		log.Println("Client connection closed")
+			_, err = fmt.Fprintf(w, "data: %s\n\n", data)
+			if err != nil {
+				log.Println("Ошибка при отправке данных клиенту:", err)
+				return
+			}
+			flusher.Flush()
+
+			// Пауза перед обработкой следующего элемента
+			time.Sleep(3 * time.Second)
+		}
 	}
 
 	// Очистить `newGroupData` после отправки, чтобы быть готовым к новым данным
@@ -105,8 +127,95 @@ func handleSSE(w http.ResponseWriter, r *http.Request) {
 	dataReady = false
 }
 
+// func handleSSE(w http.ResponseWriter, r *http.Request) {
+// 	flusher, ok := w.(http.Flusher)
+// 	if !ok {
+// 		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+// 		return
+// 	}
+
+// 	w.Header().Set("Content-Type", "text/event-stream")
+// 	w.Header().Set("Cache-Control", "no-cache")
+// 	w.Header().Set("Connection", "keep-alive")
+
+// 	clientClosed := make(chan bool)
+
+// 	// Ожидание закрытия соединения клиентом
+// 	go func() {
+// 		if c, ok := w.(http.CloseNotifier); ok {
+// 			<-c.CloseNotify()
+// 			log.Println("Клиент закрыл соединение")
+// 			clientClosed <- true
+// 		}
+// 	}()
+
+// 	dataCond.L.Lock()
+// 	for !dataReady {
+// 		dataCond.Wait() // Ждать пока данные не будут готовы
+// 	}
+// 	dataCond.L.Unlock()
+
+// 	for i := 0; i < len(newGroupData); i++ {
+// 		log.Println("Старт обработки сущностей")
+// 		newGroupData[i].Status = getRandomStatus()
+
+// 		if i == len(newGroupData)-1 {
+// 			newGroupData[i].ProcessingEnd = true
+// 		}
+
+// 		groupData[len(groupData)-len(newGroupData)+1] = newGroupData[i]
+
+// 		// Отправить обновленные данные на клиент
+// 		data, err := json.Marshal(newGroupData[i])
+// 		log.Println("Отправили сущность", newGroupData[i])
+// 		if err != nil {
+// 			http.Error(w, fmt.Sprintf("Failed to encode JSON: %v", err), http.StatusInternalServerError)
+// 			return
+// 		}
+// 		fmt.Fprintf(w, "data: %s\n\n", data)
+// 		flusher.Flush()
+// 		// искусственная задержка перед обработкой следующего элемента
+// 		select {
+// 		case <-time.After(1 * time.Second):
+// 			// продолжаем цикл
+// 		case <-clientClosed:
+// 			// если клиент закрыл соединение, завершаем обработку
+// 			return
+// 		}
+// 	}
+
+// 	// // Изменить статусы только новых объектов
+// 	// for i := range newGroupData {
+// 	// 	newGroupData[i].Status = getRandomStatus()
+// 	// }
+
+// 	// // Обновляем groupData с измененными статусами
+// 	// groupData = append(groupData[:len(groupData)-len(newGroupData)], newGroupData...)
+
+// 	// // Отправить обновленные данные на клиент
+// 	// data, err := json.Marshal(newGroupData)
+// 	// log.Println("Данные для клиента", newGroupData)
+// 	// if err != nil {
+// 	// 	http.Error(w, fmt.Sprintf("Failed to encode JSON: %v", err), http.StatusInternalServerError)
+// 	// 	return
+// 	// }
+// 	// fmt.Fprintf(w, "data: %s\n\n", data)
+// 	// flusher.Flush()
+
+// 	// // Оставляем соединение открытым, пока клиент сам его не закроет
+// 	// if c, ok := w.(http.CloseNotifier); ok {
+// 	// 	<-c.CloseNotify()
+// 	// 	log.Println("Клиент закрыл соединение")
+// 	// }
+
+// 	// Очистить newGroupData после отправки, чтобы быть готовым к новым данным
+// 	newGroupData = nil
+// 	dataReady = false
+// }
+
 func getRandomStatus() string {
 	statuses := []string{"in_progress", "completed"}
+	log.Println("Обработка статусов")
 	return statuses[rand.Intn(len(statuses))]
 }
 

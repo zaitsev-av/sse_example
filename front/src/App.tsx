@@ -1,4 +1,4 @@
-import {useState, ChangeEvent} from 'react'
+import {useState, ChangeEvent, useCallback} from 'react'
 import {useGetConnectQuery, EntityType, useCreateEntityMutation} from "./api";
 import {Badge} from "./components/Badge";
 import {useSseForDocumentUpdates} from "./hooks";
@@ -17,9 +17,11 @@ function App() {
 		setValue(e.target.value)
 	}
 
-	useSseForDocumentUpdates(startSse, () => {
+	const handler = useCallback(() => {
 		setStartSse(false)
-	})
+	},[])
+
+	useSseForDocumentUpdates(startSse, handler)
 
 	return (
 		<>
