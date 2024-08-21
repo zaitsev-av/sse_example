@@ -55,3 +55,10 @@
 .read-the-docs {
 	color: #888;
 }
+
+.reset-button {
+	background: #370202;
+	position: absolute;
+	left: 90%;
+	top: 2%;
+}

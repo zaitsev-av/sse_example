@@ -1,5 +1,5 @@
 import {useState, ChangeEvent, useCallback} from 'react'
-import {useGetConnectQuery, EntityType, useCreateEntityMutation} from "./api";
+import {useGetConnectQuery, EntityType, useCreateEntityMutation, useLazyResetConnectQuery} from "./api";
 import {Badge} from "./components/Badge";
 import {useSseForDocumentUpdates} from "./hooks";
 import './App.css'
@@ -12,6 +12,7 @@ function App() {
 
 	const {data} = useGetConnectQuery()
 	const [create] = useCreateEntityMutation()
+	const [reset] = useLazyResetConnectQuery()
 
 	const handleOnChange = (e: ChangeEvent<HTMLInputElement>) => {
 		setValue(e.target.value)
@@ -25,6 +26,7 @@ function App() {
 
 	return (
 		<>
+			<button className={"reset-button"} onClick={() => reset()}>Reset data</button>
 			<div className="card">
 				<div className="card-body">
 					<input className="text-field" value={value} onChange={handleOnChange}/>
