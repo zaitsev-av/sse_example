@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type GroupStatus struct {
+type EntityType struct {
 	ID            string `json:"id"`
 	Status        string `json:"status"`
 	Name          string `json:"name"`
@@ -20,14 +20,14 @@ type GroupStatus struct {
 }
 
 var (
-	dataReady = false
-	dataCond  = sync.NewCond(&sync.Mutex{})
-	groupData = []GroupStatus{
+	dataReady  = false
+	dataCond   = sync.NewCond(&sync.Mutex{})
+	entityData = []EntityType{
 		{ID: uuid.New().String(), Status: "completed", Name: "First"},
 		{ID: uuid.New().String(), Status: "completed", Name: "New Task"},
 		{ID: uuid.New().String(), Status: "completed", Name: "SSE"},
 	}
-	newGroupData []GroupStatus // хранение новых данных
+	newEntityData []EntityType // хранение новых данных
 )
 
 func handleObjects(w http.ResponseWriter, r *http.Request) {
@@ -36,7 +36,7 @@ func handleObjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var newData []GroupStatus
+	var newData []EntityType
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&newData)
 	if err != nil {
@@ -45,8 +45,8 @@ func handleObjects(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Сохраняем новые данные отдельно
-	newGroupData = newData
-	groupData = append(groupData, newData...)
+	newEntityData = newData
+	entityData = append(entityData, newData...)
 	dataReady = true
 	dataCond.Broadcast() // Сигнализировать, что данные готовы
 
@@ -72,14 +72,14 @@ func handleSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	clientClosed := make(chan bool)
+	clientClosedConnect := make(chan bool)
 
 	// Ожидание закрытия соединения клиентом
 	go func() {
 		if c, ok := w.(http.CloseNotifier); ok {
 			<-c.CloseNotify()
 			log.Println("Клинет закрыл соединение - 81")
-			clientClosed <- true
+			clientClosedConnect <- true
 		}
 	}()
 
@@ -89,26 +89,26 @@ func handleSSE(w http.ResponseWriter, r *http.Request) {
 	}
 	dataCond.L.Unlock()
 
-	for i := 0; i < len(newGroupData); i++ {
+	for i := 0; i < len(newEntityData); i++ {
 		select {
-		case <-clientClosed:
+		case <-clientClosedConnect:
 			log.Println("Клмент закрыл соединени, прекращаем обработку")
 			return
 		default:
 			// изменяем статус объекта
-			itemId := newGroupData[i].ID
+			itemId := newEntityData[i].ID
 
 			newItemStatus := getRandomStatus()
-			newGroupData[i].Status = newItemStatus
-			FindById(groupData, itemId).Status = newItemStatus
+			newEntityData[i].Status = newItemStatus
+			FindById(entityData, itemId).Status = newItemStatus
 
 			// Если это последний элемент, устанавливаем флаг ProcessingEnd
-			if i == len(newGroupData)-1 {
-				newGroupData[i].ProcessingEnd = true
+			if i == len(newEntityData)-1 {
+				newEntityData[i].ProcessingEnd = true
 			}
 
 			// Отправить обновленные данные на клиент
-			data, err := json.Marshal(newGroupData[i])
+			data, err := json.Marshal(newEntityData[i])
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to encode JSON: %v", err), http.StatusInternalServerError)
 				return
@@ -126,96 +126,10 @@ func handleSSE(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Очистить `newGroupData` после отправки, чтобы быть готовым к новым данным
-	newGroupData = nil
+	// Очистить `newEntityData` после отправки, чтобы быть готовым к новым данным
+	newEntityData = nil
 	dataReady = false
 }
-
-// func handleSSE(w http.ResponseWriter, r *http.Request) {
-// 	flusher, ok := w.(http.Flusher)
-// 	if !ok {
-// 		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
-// 		return
-// 	}
-
-// 	w.Header().Set("Content-Type", "text/event-stream")
-// 	w.Header().Set("Cache-Control", "no-cache")
-// 	w.Header().Set("Connection", "keep-alive")
-
-// 	clientClosed := make(chan bool)
-
-// 	// Ожидание закрытия соединения клиентом
-// 	go func() {
-// 		if c, ok := w.(http.CloseNotifier); ok {
-// 			<-c.CloseNotify()
-// 			log.Println("Клиент закрыл соединение")
-// 			clientClosed <- true
-// 		}
-// 	}()
-
-// 	dataCond.L.Lock()
-// 	for !dataReady {
-// 		dataCond.Wait() // Ждать пока данные не будут готовы
-// 	}
-// 	dataCond.L.Unlock()
-
-// 	for i := 0; i < len(newGroupData); i++ {
-// 		log.Println("Старт обработки сущностей")
-// 		newGroupData[i].Status = getRandomStatus()
-
-// 		if i == len(newGroupData)-1 {
-// 			newGroupData[i].ProcessingEnd = true
-// 		}
-
-// 		groupData[len(groupData)-len(newGroupData)+1] = newGroupData[i]
-
-// 		// Отправить обновленные данные на клиент
-// 		data, err := json.Marshal(newGroupData[i])
-// 		log.Println("Отправили сущность", newGroupData[i])
-// 		if err != nil {
-// 			http.Error(w, fmt.Sprintf("Failed to encode JSON: %v", err), http.StatusInternalServerError)
-// 			return
-// 		}
-// 		fmt.Fprintf(w, "data: %s\n\n", data)
-// 		flusher.Flush()
-// 		// искусственная задержка перед обработкой следующего элемента
-// 		select {
-// 		case <-time.After(1 * time.Second):
-// 			// продолжаем цикл
-// 		case <-clientClosed:
-// 			// если клиент закрыл соединение, завершаем обработку
-// 			return
-// 		}
-// 	}
-
-// 	// // Изменить статусы только новых объектов
-// 	// for i := range newGroupData {
-// 	// 	newGroupData[i].Status = getRandomStatus()
-// 	// }
-
-// 	// // Обновляем groupData с измененными статусами
-// 	// groupData = append(groupData[:len(groupData)-len(newGroupData)], newGroupData...)
-
-// 	// // Отправить обновленные данные на клиент
-// 	// data, err := json.Marshal(newGroupData)
-// 	// log.Println("Данные для клиента", newGroupData)
-// 	// if err != nil {
-// 	// 	http.Error(w, fmt.Sprintf("Failed to encode JSON: %v", err), http.StatusInternalServerError)
-// 	// 	return
-// 	// }
-// 	// fmt.Fprintf(w, "data: %s\n\n", data)
-// 	// flusher.Flush()
-
-// 	// // Оставляем соединение открытым, пока клиент сам его не закроет
-// 	// if c, ok := w.(http.CloseNotifier); ok {
-// 	// 	<-c.CloseNotify()
-// 	// 	log.Println("Клиент закрыл соединение")
-// 	// }
-
-// 	// Очистить newGroupData после отправки, чтобы быть готовым к новым данным
-// 	newGroupData = nil
-// 	dataReady = false
-// }
 
 func getRandomStatus() string {
 	statuses := []string{"in_progress", "completed"}
@@ -224,7 +138,7 @@ func getRandomStatus() string {
 }
 
 func getConnect(w http.ResponseWriter, r *http.Request) {
-	responseData, err := json.Marshal(groupData)
+	responseData, err := json.Marshal(entityData)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to encode JSON: %v", err), http.StatusInternalServerError)
 		return
@@ -261,7 +175,7 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8080", server))
 }
 
-func FindById(list []GroupStatus, id string) *GroupStatus {
+func FindById(list []EntityType, id string) *EntityType {
 	for i := range list {
 		if list[i].ID == id {
 			return &list[i]
