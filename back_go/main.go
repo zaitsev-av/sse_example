@@ -20,15 +20,35 @@ type EntityType struct {
 }
 
 var (
-	dataReady  = false
-	dataCond   = sync.NewCond(&sync.Mutex{})
-	entityData = []EntityType{
+	dataReady         = false
+	dataCond          = sync.NewCond(&sync.Mutex{})
+	defaultEntityData = []EntityType{
 		{ID: uuid.New().String(), Status: "completed", Name: "First"},
 		{ID: uuid.New().String(), Status: "completed", Name: "New Task"},
 		{ID: uuid.New().String(), Status: "completed", Name: "SSE"},
 	}
+	entityData    = defaultEntityData
 	newEntityData []EntityType // хранение новых данных
 )
+
+// Обработчик для сброса данных на дефолтные
+func handleReset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Сброс данных до дефолтных
+	dataCond.L.Lock()
+	entityData = make([]EntityType, len(defaultEntityData))
+	copy(entityData, defaultEntityData)
+	newEntityData = nil
+	dataReady = false
+	dataCond.L.Unlock()
+
+	w.WriteHeader(http.StatusOK)
+	log.Println("Сброс данных")
+}
 
 func handleObjects(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -100,6 +120,7 @@ func handleSSE(w http.ResponseWriter, r *http.Request) {
 
 			newItemStatus := getRandomStatus()
 			newEntityData[i].Status = newItemStatus
+			log.Println("Для ", newEntityData[i].Name, "изменился статус на ", newItemStatus)
 			FindById(entityData, itemId).Status = newItemStatus
 
 			// Если это последний элемент, устанавливаем флаг ProcessingEnd
@@ -132,7 +153,7 @@ func handleSSE(w http.ResponseWriter, r *http.Request) {
 }
 
 func getRandomStatus() string {
-	statuses := []string{"in_progress", "completed"}
+	statuses := []string{"in_progress", "completed", "error"}
 	log.Println("Обработка статусов")
 	return statuses[rand.Intn(len(statuses))]
 }
@@ -168,6 +189,7 @@ func main() {
 	mux.HandleFunc("/objects", handleObjects)
 	mux.HandleFunc("/events", handleSSE)
 	mux.HandleFunc("/connect", getConnect)
+	mux.HandleFunc("/reset", handleReset)
 
 	server := withCORS(mux)
 
