@@ -20,7 +20,18 @@ function App() {
 
 	const handler = useCallback(() => {
 		setStartSse(false)
-	},[])
+	}, [])
+
+	const handleAddEntity = () => {
+		if (value.length > 0) {
+			setEntity(prevState => [...prevState, {
+				name: value,
+				id: (100000 * Math.random()).toFixed().toString(),
+				status: 'pending'
+			} as EntityType])
+			setValue("")
+		}
+	}
 
 	useSseForDocumentUpdates(startSse, handler)
 
@@ -29,15 +40,12 @@ function App() {
 			<button className={"reset-button"} onClick={() => reset()}>Reset data</button>
 			<div className="card">
 				<div className="card-body">
-					<input className="text-field" value={value} onChange={handleOnChange}/>
-					<button onClick={() => {
-						setEntity(prevState => [...prevState, {
-							name: value,
-							id: (100000 * Math.random()).toFixed().toString(),
-							status: 'pending'
-						} as EntityType])
-						setValue("")
-					}}>
+					<input className="text-field" value={value} onChange={handleOnChange} onKeyUp={(event) => {
+						if (event.key === 'Enter') {
+							handleAddEntity()
+						}
+					}}/>
+					<button onClick={handleAddEntity}>
 						add
 					</button>
 				</div>
