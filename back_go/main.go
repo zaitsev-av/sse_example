@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/fatih/color"
 	"log"
 	"math/rand"
 	"net/http"
@@ -29,6 +30,8 @@ var (
 	}
 	entityData    = defaultEntityData
 	newEntityData []EntityType // хранение новых данных
+	red           = color.New(color.FgRed).SprintFunc()
+	green         = color.New(color.FgGreen).SprintFunc()
 )
 
 // Обработчик для сброса данных на дефолтные
@@ -98,7 +101,7 @@ func handleSSE(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		if c, ok := w.(http.CloseNotifier); ok {
 			<-c.CloseNotify()
-			log.Println("Клинет закрыл соединение - 81")
+			log.Println(red("Клинет закрыл соединение - 81"))
 			clientClosedConnect <- true
 		}
 	}()
@@ -120,7 +123,7 @@ func handleSSE(w http.ResponseWriter, r *http.Request) {
 
 			newItemStatus := getRandomStatus()
 			newEntityData[i].Status = newItemStatus
-			log.Println("Для ", newEntityData[i].Name, "изменился статус на ", newItemStatus)
+			log.Println(red("Для"), green(newEntityData[i].Name), red("изменился статус на"), green(newItemStatus))
 			FindById(entityData, itemId).Status = newItemStatus
 
 			// Если это последний элемент, устанавливаем флаг ProcessingEnd
@@ -154,7 +157,7 @@ func handleSSE(w http.ResponseWriter, r *http.Request) {
 
 func getRandomStatus() string {
 	statuses := []string{"in_progress", "completed", "error"}
-	log.Println("Обработка статусов")
+	log.Println(green("Обработка статусов"))
 	return statuses[rand.Intn(len(statuses))]
 }
 
